@@ -154,7 +154,7 @@ def genTrainingTestingData(dataPath,trainingFilePath,testingFilePath):
     #print data.shape[0];
     shuffleData = np.random.permutation(data);
     testIndex = -shuffleData.shape[0]/3;
-    testMatrix = shuffleData[testIndex:-1,:];
+    testMatrix = shuffleData[int(testIndex):-1,:];
     np.savetxt(testingFilePath,testMatrix,delimiter=",",fmt='%1.7f');
     numOfPositive = 0;
     numOfNegative = 0
