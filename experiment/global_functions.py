@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from __future__ import division;
 import numpy as np;
 from numpy import linalg as LA;
 import invwishart;
@@ -154,7 +153,7 @@ def genTrainingTestingData(dataPath,trainingFilePath,testingFilePath):
     #print data.shape[0];
     shuffleData = np.random.permutation(data);
     testIndex = -shuffleData.shape[0]/3;
-    testMatrix = shuffleData[int(testIndex):-1,:];
+    testMatrix = shuffleData[testIndex:-1,:];
     np.savetxt(testingFilePath,testMatrix,delimiter=",",fmt='%1.7f');
     numOfPositive = 0;
     numOfNegative = 0
@@ -213,9 +212,9 @@ def calcF1Score(testingFile,predictedFile):
                 TN = TN + 1;
             else:
                 FP = FP + 1;
-    precision = TP/(TP+FP) if (TP+FP)!=0 else 0;
+    precision = 1.0*TP/(TP+FP) if (TP+FP)!=0 else 0;
     print precision;
-    recall = TP/(TP+FN) if (TP+FN)!=0 else 0;
+    recall = 1.0*TP/(TP+FN) if (TP+FN)!=0 else 0;
     print recall;
-    F1Score = 2*precision*recall/(precision+recall) if (precision+recall)!=0 else 0 ;
+    F1Score = 2.0*precision*recall/(precision+recall) if (precision+recall)!=0 else 0 ;
     return F1Score;
