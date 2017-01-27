@@ -1,6 +1,7 @@
 import global_functions as gf;
 import timeit;
 import os;
+import sys;
 
 '''
 1) Split data samples into training samples and testing samples
@@ -9,9 +10,9 @@ import os;
 4) SVM classification, dimension reduced training samples, dimension reduced testing samples.
 '''
 
-def pca_svm_classification(cMin, cMax, eigenvectors, upperBound):
+def pca_svm_classification(cMin, cMax, eigenvectors, upperBound, fileName):
     bufSize = 0;
-    f = open('f1score_'+dataType,'ab',bufSize);
+    f = open(fileName,'ab',bufSize);
     for reducedFeature in range(1,upperBound+1):
         print "**************** "+ str(reducedFeature) +" ********************"; 
         
@@ -52,7 +53,8 @@ def pca_svm_classification(cMin, cMax, eigenvectors, upperBound):
     f.close();
 
 #ionosphere,diabetes, australian,german,colon-cancer;
-dataType = "german";
+dataType = str(sys.argv[1]);
+#dataType = "german";
 filePath = "./input/"+dataType+"_prePCA";
 trainingFilePath = filePath+"_training";
 testingFilePath = filePath+"_testing";
@@ -85,14 +87,13 @@ for i in range(0,numOfExpr):
     print "number of component: " + str(upperBound);
     
     # 2.1.4) Applying projection matrix on training and testing data, then do SVM classification.
-    pca_svm_classification(cMin, cMax, eigenvectors, upperBound);
-'''
-# 2.2) Generating the noisy Eigenvectors, the noise is added into the original covariance matrix.
-# 2.2.2) Generating the noisy Eigenvectors directly. 
-sortedW,noisyEigvectors = gf.genNoisyEigenvectors(covMatrix);
+    pca_svm_classification(cMin, cMax, eigenvectors, upperBound,'f1score_'+dataType);
 
-# 2.2.3) Generating the projection matrix based on energy.
-upperBound = gf.getNumberOfPrinciples(sortedW,energy);
-print "number of noisy component: " + str(upperBound);
-pca_svm_classification(cMin, cMax, noisyEigvectors, upperBound);
-'''
+    # 2.2) Generating the noisy Eigenvectors, the noise is added into the original covariance matrix.
+    # 2.2.2) Generating the noisy Eigenvectors directly. 
+    sortedW,noisyEigvectors = gf.genNoisyEigenvectors(covMatrix);
+    
+    # 2.2.3) Generating the projection matrix based on energy.
+    upperBound = gf.getNumberOfPrinciples(sortedW,energy);
+    print "number of noisy component: " + str(upperBound);
+    pca_svm_classification(cMin, cMax, noisyEigvectors, upperBound,'f1score_'+dataType+'_noisy');
