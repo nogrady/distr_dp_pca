@@ -3,6 +3,7 @@
 import numpy as np;
 from numpy import linalg as LA;
 import invwishart;
+import os;
 
 
 def genCovMatrix(trainingDataPath):
@@ -14,9 +15,11 @@ def genCovMatrix(trainingDataPath):
     cMin = np.amin(matrix,axis=0);
     matrix = np.divide((matrix - cMin),(cMax-cMin));
     
-    columnMean = np.mean(matrix,axis=0);
-    for k in range(len(matrix)):
-        matrix[k,:]=matrix[k,:]-columnMean;
+# It seems that I don't need to substract the mean vector, which is used to calculate for the scatter matrix,
+# but here, since I am using the np.cov(), I can just throw the raw matrix in.
+#    columnMean = np.mean(matrix,axis=0);
+#    for k in range(len(matrix)):
+#        matrix[k,:]=matrix[k,:]-columnMean;
     covMatrix = np.cov(matrix.T);
     return cMin,cMax,covMatrix;
 
@@ -218,3 +221,21 @@ def calcF1Score(testingFile,predictedFile):
     print recall;
     F1Score = 2.0*precision*recall/(precision+recall) if (precision+recall)!=0 else 0 ;
     return F1Score;
+
+def splitAndSaveDatasets(inputFilePath,outputFolderPath,numOfTrunks):
+    data = np.loadtxt(inputFilePath,delimiter=",");
+    shuffleData = np.random.permutation(data);
+    
+    if not os.path.exists(outputFolderPath):
+        os.makedirs(outputFolderPath);
+    
+    subDataSets = np.array_split(shuffleData,numOfTrunks);
+    for i in range(0,numOfTrunks):
+        np.savetxt(outputFolderPath+"/"+str(i),subDataSets[i],delimiter=",",fmt='%1.2f');
+    '''
+    My version of split, don't invent the wheels again. so, later, i find the array_split() methods, which 
+    allows the numOfTrunkss to be an integer that does not equally divide the axis. 
+    binSize = shuffleData.shape[0]/numOfTrunks;
+    for i in range(0,numOfTrunks):
+        np.savetxt(outputFolderPath+"/"+str(i),shuffleData[(i-1)*binSize:i*binSize-1,:],delimiter=",",fmt='%1.7f');
+    '''

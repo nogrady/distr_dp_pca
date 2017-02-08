@@ -53,8 +53,8 @@ def pca_svm_classification(cMin, cMax, eigenvectors, upperBound, fileName):
     f.close();
 
 #ionosphere,diabetes, australian,german,colon-cancer;
-dataType = str(sys.argv[1]);
-#dataType = "german";
+#dataType = str(sys.argv[1]);
+dataType = "diabetes";
 filePath = "./input/"+dataType+"_prePCA";
 trainingFilePath = filePath+"_training";
 testingFilePath = filePath+"_testing";
