@@ -116,12 +116,34 @@ def myGlobalPCA(folderPath):
     #print U.dot(S)[:,0];
     return U.dot(S);
 
+def svmRBFKernel(trainingData,trainingLabel,testingData,testingLabel):
+    skfCV = StratifiedKFold(n_splits=10,shuffle=True);
+        
+    # 2). Grid search, with the C and gamma parameters.
+    C_range = np.logspace(-3, 3, 8);
+    gamma_range = np.logspace(-3, 3, 8);
+    param_grid = dict(gamma=gamma_range, C=C_range);
+    # Notice here that the svm.SVC is just for searching for the parameter, we didn't really train the model yet.  
+    grid = GridSearchCV(svm.SVC(kernel='rbf'), param_grid=param_grid, n_jobs =2, cv=skfCV);
+    #grid.fit(ldaProjTrainingData, trainingLabel);
+    grid.fit(trainingData, trainingLabel);
+    print("The best parameters are %s with a score of %0.2f"
+          % (grid.best_params_, grid.best_score_));
+    
+    # 3). Train the SVM model using the parameters from grid search. 
+    svmClf = svm.SVC(C = grid.best_params_['C'], gamma = grid.best_params_['gamma'], kernel='rbf');
+    svmClf.fit(trainingData,trainingLabel);
+    #print svmClf.support_;
+    # 4). Predict the testing data and calculate the f1 score.
+    svmPred = svmClf.predict(testingData);
+    result = gf.calcF1Score(testingLabel,svmPred);
+    return result;
 if __name__ == "__main__":
     
-    dataSetPath = "data/diabetes_prePCA";
+    dataSetPath = "input/diabetes_prePCA";
     outputFolderPath = dataSetPath+"_referPaper2/plaintext/";
-    trainingDataPath = "data/diabetes_prePCA_training";
-    testingDataPath = "data/diabetes_prePCA_testing";
+    trainingDataPath = "input/diabetes_prePCA_training";
+    testingDataPath = "input/diabetes_prePCA_testing";
     columnMean = genTrainingTestingData(dataSetPath,trainingDataPath,testingDataPath);
     numOfTrunks = 20;
     gf.splitAndSaveDatasets(trainingDataPath,outputFolderPath,numOfTrunks);
@@ -137,34 +159,23 @@ if __name__ == "__main__":
     testingLabel = testingData[:,0];
     centeredTestingData = pureTestingData - columnMean;
     projMatrix = myGlobalPCA(outputFolderPath);
+    pgResultList=[];
+    myResultList=[];
     
     for k in range(1,6):
         pgProjMatrix = privateGlobalPCA(outputFolderPath,k); 
         #print pgProjMatrix.shape;   
-        #kProjMatrix = projMatrix[:,0:k];
         projTrainingData = np.dot(pureTrainingData,pgProjMatrix);
         projTestingData = np.dot(centeredTestingData,pgProjMatrix);
+        result = svmRBFKernel(projTrainingData,trainingLabel,projTestingData,testingLabel);
+        pgResultList.append(result);
         
-        skfCV = StratifiedKFold(n_splits=10,shuffle=True);
-        
-        # 2). Grid search, with the C and gamma parameters.
-        C_range = np.logspace(-9, 9, 10);
-        gamma_range = np.logspace(-9, 9, 10);
-        param_grid = dict(gamma=gamma_range, C=C_range);
-        # Notice here that the svm.SVC is just for searching for the parameter, we didn't really train the model yet.  
-        grid = GridSearchCV(svm.SVC(kernel='rbf'), param_grid=param_grid, n_jobs =2, cv=skfCV);
-        #grid.fit(ldaProjTrainingData, trainingLabel);
-        grid.fit(projTrainingData, trainingLabel);
-        print("The best parameters are %s with a score of %0.2f"
-              % (grid.best_params_, grid.best_score_));
-        
-        # 3). Train the SVM model using the parameters from grid search. 
-        svmClf = svm.SVC(C = grid.best_params_['C'], gamma = grid.best_params_['gamma'], kernel='rbf');
-        svmClf.fit(projTrainingData,trainingLabel);
-        #print svmClf.support_;
-        # 4). Predict the testing data and calculate the f1 score.
-        svmPred = svmClf.predict(projTestingData);
-        result = gf.calcF1Score(testingLabel,svmPred);
+        kProjMatrix = projMatrix[:,0:k];
+        projTrainingData = np.dot(pureTrainingData,kProjMatrix);
+        projTestingData = np.dot(centeredTestingData,kProjMatrix);
+        result = svmRBFKernel(projTrainingData,trainingLabel,projTestingData,testingLabel);
+        myResultList.append(result);
         print "===========================";
         #return result;
-    
+    for i in range(0,len(pgResultList)):
+        print "%f , %f" % (pgResultList[i][2],myResultList[i][2]);
