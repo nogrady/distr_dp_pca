@@ -5,6 +5,8 @@ import invwishart;
 import global_functions as gf;
 import os;
 import copy;
+from paillier import *;
+
 
 def distance(v1, v2):
     v = v1 - v2;
@@ -87,6 +89,63 @@ def genSingleNoisyEigenvector_power(covMatrix,epsDiff):
             x0 = x1;
             count = count + 1;            
     return x1;
+
+'''
+Combine madelon's label and data together 
+'''
+label = np.loadtxt("./input/tic/tictgts2000.txt",delimiter=",");
+data = np.loadtxt("./input/tic/ticeval2000.txt",delimiter="\t");
+#print label[0];
+f = open("./input/tic/tic_labeled", 'w')
+labelNum = 1;
+for i in range(0,len(label)):
+    if(label[i]==1):
+        labelNum = 1;
+    else:
+        labelNum = -1;
+    labelData = np.insert(data[i],0,labelNum);
+    intLabelData = labelData.astype(int);
+    strLabelData = intLabelData.astype('str');
+    labelList = strLabelData.tolist();
+    f.write(','.join(labelList));
+    f.write("\n");
+    #print labelData;
+f.close();
+
+'''
+Test the Paillier Encryption System
+
+priv, pub = generate_keypair(128);
+a = 50;
+b = 1;
+m = -6;
+
+x = encrypt(pub, a);
+y = encrypt(pub, b);
+
+if(a>=np.absolute(b*m)):
+    mPrime = pub.n_sq+m;
+    encMul = e_mul_const(pub, y, mPrime);
+    #print decrypt(priv, pub, encMul);
+    encAdd = e_add(pub, x, encMul);
+    print decrypt(priv, pub, encAdd);
+else:
+    x_neg = e_mul_const(pub, x, pub.n_sq-1);
+    encMul = e_mul_const(pub, y, np.absolute(m));
+    encAdd = e_add(pub, x_neg, encMul);
+    print decrypt(priv, pub, encAdd)*(-1);
+'''
+'''
+a = np.arange(100).reshape(10,10)
+for x in np.nditer(a):
+    y = encrypt(pub, x);
+    print y;
+    print decrypt(priv, pub, y);
+    print "====";
+z = e_add(pub, x, y);
+print z;
+#print decrypt(priv, pub, z);
+'''
 '''
 matrix = np.array([[170,0],[175,0],[173,0],[180,0]]);
 neighMatrix = np.array([[170,0],[175,0],[173,0],[180,0],[160,5]]);

@@ -1,18 +1,12 @@
 import os;
 import numpy as np;
 import glob;
-import dataOwnerShare;
-from numpy import linalg as LA;
 import copy;
-from paillier import *;
-import thread;
-from threading import Thread;
-import multiprocessing;
+from ..paillier import paillierImpl;
 from multiprocessing import Pool;
 import time;
-import ntpath;
 import decimal;
-import math;
+
 
 '''
 def aggrtDataOwnerShares(folderPath):
@@ -34,25 +28,23 @@ def calcEigenvectors(SumR,SumV,SumN):
     w,v = LA.eig(totalScatterMatrix);
     print w.shape;
     print v.shape;
-'''
-    
-def aggrtEncryptedDataOwnerShare(encFolderPath,pub):
+
+def aggrtEncryptedDataOwnerShare(self,encFolderPath,pub):
     #print "Aggregating encrypted data shares.."
     print str(int(round(time.time() * 1000)))+", Proxy aggregation start...";
-    
     
     encRList = glob.glob(encFolderPath+"encR/*");
     encVList = glob.glob(encFolderPath+"encV/*");
     encNList = glob.glob(encFolderPath+"encN/*");
     
-    sumEncR = aggrtEncryptedData(encRList,pub);
-    sumEncV = aggrtEncryptedData(encVList,pub);
-    sumEncN = aggrtEncryptedData(encNList,pub);
+    sumEncR = self.__aggrtEncryptedData(encRList,pub);
+    sumEncV = self.__aggrtEncryptedData(encVList,pub);
+    sumEncN = self.__aggrtEncryptedData(encNList,pub);
     
     print str(int(round(time.time() * 1000)))+", Proxy aggregation ends...";
     
     return sumEncR, sumEncV,sumEncN;
-
+'''
 
 def aggrtEncryptedData(encFileList,pub):
     enc = loadEncryptedData(encFileList[0]);
@@ -71,19 +63,21 @@ def addEncryptedData(sumEnc,enc,pub):
     if enc.ndim == 2:
         for i in range(0,enc.shape[0]):
             for j in range(0,enc.shape[1]):
-                sumEnc[i,j] = e_add(pub, sumEnc[i,j], enc[i,j]);
+                sumEnc[i,j] = paillierImpl.e_add(pub, sumEnc[i,j], enc[i,j]);
     elif enc.ndim == 1:
         for i in range(0,enc.shape[0]):
-            sumEnc[i] = e_add(pub, sumEnc[i], enc[i]);
+            sumEnc[i] = paillierImpl.e_add(pub, sumEnc[i], enc[i]);
     else:
-        sumEnc = e_add(pub, sumEnc, enc);
+        sumEnc = paillierImpl.e_add(pub, sumEnc, enc);
     return sumEnc;
     
 def split_list(alist, wanted_parts=1):
     length = len(alist)
     return [ alist[i*length // wanted_parts: (i+1)*length // wanted_parts] 
              for i in range(wanted_parts) ]
-
+'''
+Multi-processing, not mutli-threading
+'''
 def paraTask(fileList,pub):
     p = Pool(8);
     results = [];
@@ -104,7 +98,7 @@ def paraTask(fileList,pub):
         #print sumEnc.shape;
     else:
         for res in results[1:]:
-            sumEnc = e_add(pub, sumEnc, res.get());
+            sumEnc = paillierImpl.e_add(pub, sumEnc, res.get());
     
     return sumEnc;
     
@@ -121,55 +115,6 @@ def paraAggrtEncryptedData(encFolderPath,pub):
     print str(int(round(time.time() * 1000)))+", Proxy parallel aggregation end...";
     
     return sumEncR,sumEncV,sumEncN;
-
-    
-def dataOwnerJob(filePath,encFolderPath,pub):
-    #print str(int(round(time.time() * 1000)))+", "+filePath+", data share encryption start...";
-    encR,encV,encN = dataOwnerShare.calcAndEncryptDataShare(filePath,pub);
-    fileName = ntpath.basename(filePath);
-    dataOwnerShare.saveShares(encFolderPath,fileName,encR,encV,encN);
-    #print str(time.ctime(time.time()))+", "+filePath+", data share encryption done!";
-    
-def callDataOwners(folderPath,encFolderPath,pub):
-    try:
-        dataFileList = glob.glob(folderPath+"/*");
-        for path in dataFileList:
-            t = Thread(target=dataOwnerJob, args=(path,encFolderPath,pub,));
-            t.start();
-    except:
-        print "Error: unable to start thread"
-    return;
-
-def dataUserJob(encR,encV,encN,priv,pub):
-    
-    print str(int(round(time.time() * 1000)))+", Data User decryption starts.."
-    
-    # Decrypt encR
-    R = np.zeros((encR.shape[0],encR.shape[1]));
-    
-    for i in range(0,encR.shape[0]):
-        for j in range(0,encR.shape[1]):
-            R[i,j] = decrypt(priv,pub,int(encR[i,j]));
-    #print "Decrypted Aggregated R:";
-    #print R;
-    
-    # Decrypt encV
-    v = np.zeros(encV.shape[0]); 
-    for i in range(0,encV.shape[0]):
-        v[i] = decrypt(priv,pub,int(encV[i]));
-    #print "Decrypted Aggregated V:";
-    #print v;
-    
-    # Decrypt encN
-    N = decrypt(priv,pub,int(encN));
-    
-    # Performing EVD on decrypted result.
-    aggr = R - np.divide(np.dot(v,v.T),N);
-    w, v = LA.eig(aggr);
-    
-    print str(int(round(time.time() * 1000)))+", Data User decryption ends.."
-    
-    return v;
 
 def initFolders(encFolderPath):
     encRFolderPath = encFolderPath+"encR";

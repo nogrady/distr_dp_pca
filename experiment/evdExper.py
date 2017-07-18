@@ -1,4 +1,4 @@
-import global_functions as gf;
+from pkg.global_functions import globalFunction as gf;
 import timeit;
 import os;
 import sys;
@@ -13,7 +13,8 @@ import sys;
 def pca_svm_classification(cMin, cMax, eigenvectors, upperBound, fileName):
     bufSize = 0;
     f = open(fileName,'ab',bufSize);
-    for reducedFeature in range(1,upperBound+1):
+#    for reducedFeature in range(10,upperBound+1,(upperBound/100)*10):
+    for reducedFeature in range(1,upperBound):
         print "**************** "+ str(reducedFeature) +" ********************"; 
         
         projMatrix = gf.genProjMatrix(eigenvectors,reducedFeature);
@@ -54,7 +55,7 @@ def pca_svm_classification(cMin, cMax, eigenvectors, upperBound, fileName):
 
 #ionosphere,diabetes, australian,german,colon-cancer;
 #dataType = str(sys.argv[1]);
-dataType = "diabetes";
+dataType = "tic";
 filePath = "./input/"+dataType+"_prePCA";
 trainingFilePath = filePath+"_training";
 testingFilePath = filePath+"_testing";
@@ -82,7 +83,7 @@ for i in range(0,numOfExpr):
     #print eigenvectors[:,0];
     
     # 2.1.3) Getting projection matrix from Eigenvectors based on the different required energy.
-    energy = 0.95;
+    energy = 0.9;
     upperBound = gf.getNumberOfPrinciples(sortedW,energy);    
     print "number of component: " + str(upperBound);
     

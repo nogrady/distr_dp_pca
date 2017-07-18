@@ -18,6 +18,8 @@ for i in range(0,len(content)):
         matrix.append(copy.copy(row));
         del row[:];
 
+print len(matrix);
+print len(matrix[0]); 
 
 for i in range(0,len(matrix[0])):
     tmpSum = 0;

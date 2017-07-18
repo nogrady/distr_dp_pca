@@ -1,10 +1,10 @@
-import global_functions as gf;
+from pkg.global_functions import globalFunction;
 import timeit;
 import os;
 import sys;
 import numpy as np;
 from numpy import linalg as LA;
-from paillier import *;
+from pkg.paillier import paillierImpl;
 import decimal;
 import math;
 
@@ -22,10 +22,10 @@ def preSecurePowerIteration(R,v,N,pub,pri):
     encR = np.empty((R.shape[0],R.shape[1]),dtype=np.dtype(decimal.Decimal));
     for i in range(0,R.shape[0]):
         for j in range(0,R.shape[1]):
-            encR[i,j] = encrypt(pub,R[i,j]);
+            encR[i,j] = paillierImpl.encrypt(pub,R[i,j]);
     encV = np.empty(v.shape[0],dtype=np.dtype(decimal.Decimal));
     for i in range(0,len(v)):
-        encV[i] = encrypt(pub,v[i]);
+        encV[i] = paillierImpl.encrypt(pub,v[i]);
     return encR,encV;
 def securePowerIteration(encR,encV,N,b,pub,pri):
     # 3) calculate enc(vTb),enc(Rb);
@@ -33,9 +33,9 @@ def securePowerIteration(encR,encV,N,b,pub,pri):
     #print b;
     #b_times_N = np.multiply(b,N);
     #print b_times_N;
-    encvTb = encrypt(pub,0);
+    encvTb = paillierImpl.encrypt(pub,0);
     for i in range(0,len(encV)):
-        encvTb = e_add(pub, encvTb, e_mul_const(pub, encV[i], b[i]));
+        encvTb = paillierImpl.e_add(pub, encvTb, paillierImpl.e_mul_const(pub, encV[i], b[i]));
     '''
     To verify if the homomorphic addition and multiplication of vTb are correct.
     vTb = 0;
@@ -46,10 +46,10 @@ def securePowerIteration(encR,encV,N,b,pub,pri):
     #print encvTb;
     #print decrypt(priv, pub, encvTb);
     encRb = np.empty(b.shape[0],dtype=np.dtype(decimal.Decimal));
-    temp = encrypt(pub,0);
+    temp = paillierImpl.encrypt(pub,0);
     for i in range(0,encR.shape[0]):
         for j in range(0,encR.shape[1]):
-            temp = e_add(pub, temp, e_mul_const(pub, encR[i,j], b[j]));
+            temp = paillierImpl.e_add(pub, temp, paillierImpl.e_mul_const(pub, encR[i,j], b[j]));
         encRb[i] = temp;
     #print encRb;
     '''
@@ -65,21 +65,21 @@ def securePowerIteration(encR,encV,N,b,pub,pri):
     print Rb;
     '''
     # 4) Calculate enc(Rb)-enc(v)^(vTb)/N;
-    vTb_dv_N = int(np.divide(decrypt(priv, pub, encvTb),N)); 
+    vTb_dv_N = int(np.divide(paillierImpl.decrypt(priv, pub, encvTb),N)); 
     #print vTb_dv_N;
     encSb = np.empty(b.shape[0],dtype=np.dtype(decimal.Decimal));
     # it is possible that enc(Rb)-enc(v)^(vTb)/N is negative, so...
     signSb = np.empty(b.shape[0],dtype=np.dtype(decimal.Decimal));
     
     for i in range(0,len(encSb)):
-        encvvTb_dv_N = e_mul_const(pub, encV[i], vTb_dv_N);
-        if(decrypt(priv,pub,encRb[i])>=decrypt(priv,pub,encvvTb_dv_N)):
+        encvvTb_dv_N = paillierImpl.e_mul_const(pub, encV[i], vTb_dv_N);
+        if(paillierImpl.decrypt(priv,pub,encRb[i])>=paillierImpl.decrypt(priv,pub,encvvTb_dv_N)):
             vTb_dv_N_neg = pub.n_sq - vTb_dv_N;
-            encvvTb_dv_N = e_mul_const(pub, encV[i], vTb_dv_N_neg);
-            encSb[i] = e_add(pub, encRb[i], encvvTb_dv_N);
+            encvvTb_dv_N = paillierImpl.e_mul_const(pub, encV[i], vTb_dv_N_neg);
+            encSb[i] = paillierImpl.e_add(pub, encRb[i], encvvTb_dv_N);
             signSb[i] = 1.0;
         else:
-            encSb[i] = e_add(pub, (pub.n_sq - encRb[i]), encvvTb_dv_N);
+            encSb[i] = paillierImpl.e_add(pub, (pub.n_sq - encRb[i]), encvvTb_dv_N);
             signSb[i] = -1.0;
     #print encSb;
     Sb = np.empty(b.shape[0],dtype=np.dtype(decimal.Decimal));
@@ -87,7 +87,7 @@ def securePowerIteration(encR,encV,N,b,pub,pri):
     
     # Decrypt Sb and calculate the norm of Sb
     for i in range(0,len(Sb)):
-        Sb[i] = decrypt(priv, pub, encSb[i])*signSb[i];
+        Sb[i] = paillierImpl.decrypt(priv, pub, encSb[i])*signSb[i];
         Sb_temp = Sb_temp + Sb[i]*Sb[i];
     Sb_norm = math.sqrt(Sb_temp);
     #print Sb_norm;
@@ -151,12 +151,12 @@ N = matrix.shape[0];
 
 R = np.dot(matrix.T,matrix);
 
-priv, pub = generate_keypair(128);
+priv, pub = paillierImpl.generate_keypair(128);
 
 S = prePowerIteration(R,v,N);
 encR,encV = preSecurePowerIteration(R,v,N,pub,priv);
 
-for j in range(0,3):
+for j in range(0,10):
     b = np.random.randint(100, size=(len(v), 1));
     b = np.multiply(b,N);
     Sb = b;
@@ -165,18 +165,21 @@ for j in range(0,3):
     tempSbNorm = 1;
     tempbNorm = 1;
     lastBNorm = Sb;
-    while tempSbNorm > epsolon:
+    start = timeit.default_timer();
+    while tempbNorm > epsolon:
         #print str(i)+"th iteration:";
         bTemp,b_norm = securePowerIteration(encR,encV,N,b.astype(int),pub,priv);
-        SbTemp = powerIteration(S,Sb);
-        tempSbNorm = LA.norm(Sb-SbTemp);
+        #SbTemp = powerIteration(S,Sb);
+        #tempSbNorm = LA.norm(Sb-SbTemp);
         tempbNorm = LA.norm(b_norm-lastBNorm);
         #print tempSbNorm;
-        print tempbNorm;
-        print b_norm;
+        #print tempbNorm;
+        #print b_norm;
         print "==========================";
-        Sb = SbTemp;
+        #Sb = SbTemp;
         b = bTemp;
         lastBNorm = b_norm;
         i = i+1;
+    end = timeit.default_timer();
     print i;
+    print (end-start);

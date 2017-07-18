@@ -1,20 +1,21 @@
 import os;
 import numpy as np;
 import glob;
-import dataOwnerShare;
+from pkg.DPDPCA.DataOwner import DataOwnerImpl;
 from numpy import linalg as LA;
-import copy;
-from paillier import *;
+from pkg.paillier import paillierImpl;
+from pkg.wishart import invwishart;
 import thread;
+from multiprocessing import Pool;
 from threading import Thread;
 import time;
 import ntpath;
-import global_functions as gf;
-import proxyAndDataUser;
+from pkg.global_functions import globalFunction;
+from pkg.DPDPCA.DataUser import DataUserImpl;
 import time;
 import decimal;
-import privateGlobalPCA;
 
+'''
 def validateEncScheme():
     x = np.arange(20).reshape(4,5);
     testOutputFile = "./input/testEncryption";
@@ -36,76 +37,140 @@ def validateEncScheme():
     sumEncR, sumEncV, sumEncN = proxyAndDataUser.aggrtEncryptedDataOwnerShare(encRFolderPath,encVFolderPath,encNFolderPath,pub);
 
     v = proxyAndDataUser.dataUserJob(copy.copy(sumEncR),copy.copy(sumEncV),copy.copy(sumEncN),priv,pub);
+'''
 
-def test_myWork(outputFolderPath):
-    priv, pub = generate_keypair(128);
+'''
+How to use Multi-thread in Python.
+'''
+def callDataOwners(folderPath,encFolderPath,pub):
+        try:
+            dataFileList = glob.glob(folderPath+"/*");
+            for path in dataFileList:
+                t = Thread(target=dataOwnerJob, args=(path,encFolderPath,pub,));
+                t.start();
+        except:
+            print "Error: unable to start thread"
+        return;
+    
+def privateGlobalPCA(folderPath):
+    # Get the folder, which contains all the horizontal data.
+    dataFileList = glob.glob(folderPath+"/*");
+    data = np.loadtxt(dataFileList[0],delimiter=",");
+    # Here, it should be OK with data[:,1:data.shape[1]];
+    matrix = data[:,range(1,data.shape[1])];
+    k = matrix.shape[1];
+    #k = 4;
+    dataOwner = DataOwnerImpl(dataFileList[0]);
+    P,rank = dataOwner.privateLocalPCA(dataFileList[0],k);
+    #print P.shape;
+    dataFileList.pop(0);
+    #print "Private Global PCA computing:";
+    
+    for path in dataFileList:
+        #print str(int(round(time.time() * 1000)))+", "+path;
+        PPrime,rank = dataOwner.privateLocalPCA(path,k);
+        rank = LA.matrix_rank(PPrime);
+        
+        tmpSummary = np.concatenate((PPrime, P), axis=1);
+        
+        #print tmpSummary.shape;
+        
+        C = np.dot(tmpSummary,tmpSummary.T);
+        df = len(C)+1;
+        sigma = 1/0.6*np.identity(len(C));
+        #print sigma;
+        wishart = invwishart.wishartrand(df,sigma);
+        U, s, V = np.linalg.svd(C+wishart, full_matrices=True); 
+    #    S = np.diagflat(s);
+    #    P = np.dot(U[:,0:k-1],S[0:k-1,0:k-1]);
+    #    plPCA.privateLocalPCA(path,k);
+        
+    # return P;
+    
+def dataOwnerJob(filePath,encFolderPath,pub):
+    #print str(int(round(time.time() * 1000)))+", "+filePath+", data share encryption start...";
+    dataOwner = DataOwnerImpl(filePath);
+    dataOwner.setPub(pub);
+    encR,encV,encN = dataOwner.calcAndEncryptDataShare();
+    fileName = ntpath.basename(filePath);
+    dataOwner.saveShares(encFolderPath,fileName,encR,encV,encN);
+    #print str(time.ctime(time.time()))+", "+filePath+", data share encryption done!";
+     
+def test_myWork(outputFolderPath,encFolderPath):
+    priv, pub = paillierImpl.generate_keypair(128);
     dataFileList = glob.glob(outputFolderPath+"*");
         # 2.1) DataOwnerJob
-    proxyAndDataUser.initFolders(encFolderPath);
+        
     print str(int(round(time.time() * 1000)))+", Data Owners encrypt starts..";
-    for path in dataFileList:
-        proxyAndDataUser.dataOwnerJob(path,encFolderPath,pub);
+#    for path in dataFileList:
+#        dataOwnerJob(path,encFolderPath,pub);
         # 2.2) Proxy Job
     print str(int(round(time.time() * 1000)))+", Data Owners encrypt ends..";    
-    sumEncR,sumEncV,sumEncN = proxyAndDataUser.paraAggrtEncryptedData(encFolderPath,pub);
+    
+    sumEncR,sumEncV,sumEncN = pkg.DPDPCA.Proxy.paraAggrtEncryptedData(encFolderPath,pub);
+#    encRList = glob.glob(encFolderPath+"encR/*");
+#    sumEncR = paraAggregate(proxy,encRList);
     #sumEncR,sumEncV,sumEncN = proxyAndDataUser.aggrtEncryptedDataOwnerShare(encFolderPath,pub);
         # 2.3) Data User Job
-    proxyAndDataUser.dataUserJob(sumEncR,sumEncV,sumEncN,priv,pub);
+    dataUser = DataUserImpl(pub,priv);
+    dataUser.decryptAndEVD(sumEncR,sumEncV,sumEncN,priv,pub);
+    
 def test_otherWork(dataSetPath):
     print str(int(round(time.time() * 1000)))+", Private Global PCA starts..";
-    privateGlobalPCA.simulate(dataSetPath);
+    privateGlobalPCA(dataSetPath);
     print str(int(round(time.time() * 1000)))+", Private Global PCA ends..";
     
 #validateEncScheme();
-
-dataSetPath = "./input/australian_prePCA";
-# 1) Setup the testing environments by creating the horizontal data.
-outputFolderPath = dataSetPath+"_referPaper/plaintext/";
-encFolderPath = dataSetPath + "_referPaper/ciphertext/";
-
-for j in range(0,10):
-    if not os.path.exists(encFolderPath):
-            os.mkdir(outputFolderPath);
-            os.mkdir(encFolderPath);
+if __name__ == "__main__":
     
-    numOfTrunks = 10;
-    for i in range(0,10):
-        numOfTrunks = 10 + i*20;
-        gf.splitAndSaveDatasets(dataSetPath,outputFolderPath,numOfTrunks);
-         
-        #==================================================
-        print numOfTrunks;    
-        test_myWork(outputFolderPath);
-        print "========================";
-        test_otherWork(outputFolderPath);
-        print "------------------------"
-        #==================================================
-    os.system("rm -rf "+outputFolderPath);
-    os.system("rm -rf "+encFolderPath);
-
-#Test Paillier encryption
-'''
-priv, pub = generate_keypair(128);
-matrix = np.empty((2,2),dtype=np.dtype(decimal.Decimal));
-print int(round(time.time() * 1000));
-matrix[0,0] = encrypt(pub,257);
-print int(round(time.time() * 1000));
-matrix[0,1] = encrypt(pub,2);
-matrix[1,0] = e_add(pub, matrix[0,0], matrix[0,1]);
-matrix[1,1] = decrypt(priv,pub,matrix[1,0]);
-
-print matrix;
-'''
-"""
-matrix[0,1] = x;
-
-print "\n";
-np.savetxt("testFile",(x,),delimiter=",",fmt="%0x");
-encX = np.loadtxt("testFile",delimiter=",",dtype='str');
-print encX;
-strX = np.array_str(encX);
-
-print int(strX,16);
-y = decrypt(priv,pub,matrix[0,1]);
-print y;
-"""
+    dataSetPath = "data/australian_prePCA";
+    # 1) Setup the testing environments by creating the horizontal data.
+    outputFolderPath = dataSetPath+"_referPaper/plaintext/";
+    encFolderPath = dataSetPath + "_referPaper/ciphertext/";
+    
+    for j in range(0,10):
+        if not os.path.exists(encFolderPath):
+                os.mkdir(outputFolderPath);
+                os.mkdir(encFolderPath);
+        
+        numOfTrunks = 10;
+        for i in range(0,10):
+            numOfTrunks = 10 + i*20;
+            globalFunction.splitAndSaveDatasets(dataSetPath,outputFolderPath,numOfTrunks);
+             
+            #==================================================
+            print numOfTrunks;
+            test_myWork(outputFolderPath,encFolderPath);
+            print "========================";
+            test_otherWork(outputFolderPath);
+            print "------------------------";
+            #==================================================
+        os.system("rm -rf "+outputFolderPath);
+        os.system("rm -rf "+encFolderPath);
+    
+    #Test Paillier encryption
+    '''
+    priv, pub = generate_keypair(128);
+    matrix = np.empty((2,2),dtype=np.dtype(decimal.Decimal));
+    print int(round(time.time() * 1000));
+    matrix[0,0] = encrypt(pub,257);
+    print int(round(time.time() * 1000));
+    matrix[0,1] = encrypt(pub,2);
+    matrix[1,0] = e_add(pub, matrix[0,0], matrix[0,1]);
+    matrix[1,1] = decrypt(priv,pub,matrix[1,0]);
+    
+    print matrix;
+    '''
+    """
+    matrix[0,1] = x;
+    
+    print "\n";
+    np.savetxt("testFile",(x,),delimiter=",",fmt="%0x");
+    encX = np.loadtxt("testFile",delimiter=",",dtype='str');
+    print encX;
+    strX = np.array_str(encX);
+    
+    print int(strX,16);
+    y = decrypt(priv,pub,matrix[0,1]);
+    print y;
+    """

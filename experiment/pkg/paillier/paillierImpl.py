@@ -1,7 +1,5 @@
 import math
-import primes;
-import time;
-import random;
+import primes
 
 def invmod(a, p, maxiter=1000000):
     """The multiplicitive inverse of a in the integers modulo p:
@@ -64,20 +62,12 @@ def generate_keypair(bits):
     return PrivateKey(p, q, n), PublicKey(n)
 
 def encrypt(pub, plain):
-    '''
-    print "[+++] "+str(int(round(time.time() * 1000)))+" while loop starts.."
-    
     while True:
         r = primes.generate_prime(long(round(math.log(pub.n, 2))))
         if r > 0 and r < pub.n:
             break
-    print "[---] "+str(int(round(time.time() * 1000)))+" while loop ends.."
-    '''
-    r = random.randint(0,pub.n);
-    
     x = pow(r, pub.n, pub.n_sq)
     cipher = (pow(pub.g, plain, pub.n_sq) * x) % pub.n_sq
-    
     return cipher
 
 def e_add(pub, a, b):
