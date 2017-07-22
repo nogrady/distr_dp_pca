@@ -115,13 +115,22 @@ def myGlobalPCA(folderPath):
     
     #print U.dot(S)[:,0];
     return U.dot(S);
-
+def linearSVM(trainingData,trainingLabel,testingData,testingLabel):
+    svmClf = svm.LinearSVC();
+    svmClf.fit(trainingData,trainingLabel);
+    svmPred = svmClf.predict(testingData);
+    #f1Score = f1_score(testingLabel,svmPred,average='weighted');
+    result = gf.calcF1Score(testingLabel,svmPred);
+    #print "F1Score: %f" % result[2];
+    #print result;
+    #print "The linear SVM has a f1 score: %f." % f1Score;
+    return result;
 def svmRBFKernel(trainingData,trainingLabel,testingData,testingLabel):
     skfCV = StratifiedKFold(n_splits=10,shuffle=True);
         
     # 2). Grid search, with the C and gamma parameters.
-    C_range = np.logspace(-3, 3, 8);
-    gamma_range = np.logspace(-3, 3, 8);
+    C_range = np.logspace(-7, 7, 10);
+    gamma_range = np.logspace(-7, 7, 10);
     param_grid = dict(gamma=gamma_range, C=C_range);
     # Notice here that the svm.SVC is just for searching for the parameter, we didn't really train the model yet.  
     grid = GridSearchCV(svm.SVC(kernel='rbf'), param_grid=param_grid, n_jobs =2, cv=skfCV);
@@ -140,10 +149,10 @@ def svmRBFKernel(trainingData,trainingLabel,testingData,testingLabel):
     return result;
 if __name__ == "__main__":
     
-    dataSetPath = "input/diabetes_prePCA";
+    dataSetPath = "input/german_prePCA";
     outputFolderPath = dataSetPath+"_referPaper2/plaintext/";
-    trainingDataPath = "input/diabetes_prePCA_training";
-    testingDataPath = "input/diabetes_prePCA_testing";
+    trainingDataPath = "input/german_prePCA_training";
+    testingDataPath = "input/german_prePCA_testing";
     columnMean = genTrainingTestingData(dataSetPath,trainingDataPath,testingDataPath);
     numOfTrunks = 20;
     gf.splitAndSaveDatasets(trainingDataPath,outputFolderPath,numOfTrunks);
@@ -162,18 +171,21 @@ if __name__ == "__main__":
     pgResultList=[];
     myResultList=[];
     
-    for k in range(1,6):
+    result = svmRBFKernel(pureTrainingData,trainingLabel,centeredTestingData,testingLabel);
+    print result;
+    
+    for k in range(1,10):
         pgProjMatrix = privateGlobalPCA(outputFolderPath,k); 
         #print pgProjMatrix.shape;   
         projTrainingData = np.dot(pureTrainingData,pgProjMatrix);
         projTestingData = np.dot(centeredTestingData,pgProjMatrix);
-        result = svmRBFKernel(projTrainingData,trainingLabel,projTestingData,testingLabel);
+        result = linearSVM(projTrainingData,trainingLabel,projTestingData,testingLabel);
         pgResultList.append(result);
         
         kProjMatrix = projMatrix[:,0:k];
         projTrainingData = np.dot(pureTrainingData,kProjMatrix);
         projTestingData = np.dot(centeredTestingData,kProjMatrix);
-        result = svmRBFKernel(projTrainingData,trainingLabel,projTestingData,testingLabel);
+        result = linearSVM(projTrainingData,trainingLabel,projTestingData,testingLabel);
         myResultList.append(result);
         print "===========================";
         #return result;
