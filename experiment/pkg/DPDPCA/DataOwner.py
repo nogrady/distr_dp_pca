@@ -97,31 +97,20 @@ class DataOwnerImpl(object):
         
         if data is None:
             data = self.data;
-        if k > LA.matrix_rank(data):
-            k = LA.matrix_rank(data);
-            #print "Change k to: %d" % k;
             
-        #data = globalFunction.normByRow(data);
-        #k = matrix.shape[1];
-        #Preprocessing, scaling data.
-        #cMax = np.amax(matrix,axis=0);
-        #cMin = np.amin(matrix,axis=0);
-        #matrix = np.divide((matrix - cMin),(cMax-cMin));
-        columnMean = np.mean(data,axis=0);
-        #for k in range(len(matrix)):
-        #    matrix[k,:]=matrix[k,:]-columnMean;
-        centeredData = data - columnMean;
-        
-        C = np.dot(centeredData.T,centeredData);
-        """
-        df = len(C)+1;
-        sigma = 1/epsilon*np.identity(len(C));
-        #print sigma;
-        wishart = invwishart.wishartrand(df,sigma);
-    
-        U, s, V = np.linalg.svd(C+wishart);
-        """
-        U, s, V = np.linalg.svd(C);
+        k = np.minimum(k,LA.matrix_rank(data));
+        #print "In each data owner, the k is: %d" % k;
+            
+        C = np.dot(data.T,data);
+        if epsilon is not 0:
+            df = len(C)+1;
+            sigma = 1/epsilon*np.identity(len(C));
+            #print sigma;
+            wishart = invwishart.wishartrand(df,sigma);
+            U, s, V = np.linalg.svd(C+wishart);
+        else:
+            U, s, V = np.linalg.svd(C);
+        #U, s, V = LA.svd(C);
         S = np.diagflat(np.sqrt(s));
     #    print U[:,0:k].shape;
     #    print S[0:k,0:k].shape;

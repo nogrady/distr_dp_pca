@@ -2,9 +2,9 @@ import os;
 import numpy as np;
 import glob;
 from pkg.DPDPCA.DataOwner import DataOwnerImpl;
+import dataOwnerShare;
 from numpy import linalg as LA;
-from pkg.paillier import paillierImpl;
-from pkg.wishart import invwishart;
+from paillier import *;
 import thread;
 from multiprocessing import Pool;
 from threading import Thread;
@@ -14,6 +14,7 @@ from pkg.global_functions import globalFunction;
 from pkg.DPDPCA.DataUser import DataUserImpl;
 import time;
 import decimal;
+import proxyAndDataUser;
 
 '''
 def validateEncScheme():
@@ -40,7 +41,7 @@ def validateEncScheme():
 '''
 
 '''
-How to use Multi-thread in Python.
+How to use Multi-thread (not multi-process) in Python.
 '''
 def callDataOwners(folderPath,encFolderPath,pub):
         try:
@@ -52,102 +53,183 @@ def callDataOwners(folderPath,encFolderPath,pub):
             print "Error: unable to start thread"
         return;
     
+def calcAndEncryptDataShare(dataSharePath,pub):
+    data = np.loadtxt(dataSharePath,delimiter=",");
+    # Here, it should be OK with data[:,1:data.shape[1]];
+    matrix = data[:,range(1,data.shape[1])];
+    
+    if not isinstance(matrix,(int, long )):
+        matrix = matrix.astype(int);
+           
+    R = np.dot(matrix.T,matrix);       
+    v = np.sum(matrix,axis=0);
+    N = data.shape[0];
+    #matrix = discretize(matrix);
+    
+    #print "Plaintext R:";
+    #print R;
+    
+    #print R.shape;
+    #print v.shape;
+    #print N;
+    #R = R.astype(int);
+    #v = np.floor(v);
+    #print "Encrypting R:";
+    encR = np.empty((R.shape[0],R.shape[1]),dtype=np.dtype(decimal.Decimal));
+    for i in range(0,R.shape[0]):
+        for j in range(0,R.shape[1]):
+            encR[i,j] = encrypt(pub,R[i,j]);
+    '''        
+    it = np.nditer(R, flags=['multi_index']);
+    while not it.finished:
+        #print "%d <%s>" % (it[0], it.multi_index),
+        #print str(it.multi_index)+","+str(it[0]);
+        encR[it.multi_index] = encrypt(pub,it[0]);
+        it.iternext();
+    '''
+    #print "Encrypt v:";
+    encV = np.empty(v.shape[0],dtype=np.dtype(decimal.Decimal));
+    for i in range(0,len(v)):
+        encV[i] =  encrypt(pub,v[i]);
+    '''
+    it = np.nditer(v, flags=['multi_index'])
+    while not it.finished:
+        #print "%d <%s>" % (it[0], it.multi_index),
+        encV[it.multi_index] = encrypt(pub,it[0]);
+        it.iternext();
+    '''
+    encN = encrypt(pub,N);
+    return encR,encV,(encN,);
+
+def saveEncrypedData(outputPath,matrix):
+    np.savetxt(outputPath,matrix,delimiter=",",fmt="%0x");
+    
+def saveShares(encFolderPath,fileName,encR,encV,encN):
+    
+    encRFilePath = encFolderPath+"encR/"+fileName;
+    encVFilePath = encFolderPath+"encV/"+fileName;
+    encNFilePath = encFolderPath+"encN/"+fileName;
+    
+    if not os.path.exists(encFolderPath+"encR/"):
+        os.mkdir(encFolderPath+"encR/");
+        os.mkdir(encFolderPath+"encV/");
+        os.mkdir(encFolderPath+"encN/");
+    
+    saveEncrypedData(encRFilePath,encR);
+    saveEncrypedData(encVFilePath,encV);
+    saveEncrypedData(encNFilePath,encN);
+        
 def privateGlobalPCA(folderPath):
+    
+    epsilon = 0.5;
     # Get the folder, which contains all the horizontal data.
     dataFileList = glob.glob(folderPath+"/*");
     data = np.loadtxt(dataFileList[0],delimiter=",");
     # Here, it should be OK with data[:,1:data.shape[1]];
-    matrix = data[:,range(1,data.shape[1])];
-    k = matrix.shape[1];
-    #k = 4;
+    matrix = data[:,1:data.shape[1]];
+    k = matrix.shape[1]-1;
+    #k = 5;
+    #print k;
     dataOwner = DataOwnerImpl(dataFileList[0]);
-    P,rank = dataOwner.privateLocalPCA(dataFileList[0],k);
+    P = dataOwner.privateLocalPCA(None,k,epsilon);
     #print P.shape;
     dataFileList.pop(0);
     #print "Private Global PCA computing:";
-    
+
     for path in dataFileList:
         #print str(int(round(time.time() * 1000)))+", "+path;
-        PPrime,rank = dataOwner.privateLocalPCA(path,k);
-        rank = LA.matrix_rank(PPrime);
+        dataOwner = DataOwnerImpl(path);
+        PPrime = dataOwner.privateLocalPCA(None,k,epsilon);
+        
+        k_prime = np.maximum(np.minimum(LA.matrix_rank(dataOwner.data),k),LA.matrix_rank(P));
         
         tmpSummary = np.concatenate((PPrime, P), axis=1);
         
-        #print tmpSummary.shape;
-        
-        C = np.dot(tmpSummary,tmpSummary.T);
-        df = len(C)+1;
-        sigma = 1/0.6*np.identity(len(C));
-        #print sigma;
-        wishart = invwishart.wishartrand(df,sigma);
-        U, s, V = np.linalg.svd(C+wishart, full_matrices=True); 
-    #    S = np.diagflat(s);
-    #    P = np.dot(U[:,0:k-1],S[0:k-1,0:k-1]);
-    #    plPCA.privateLocalPCA(path,k);
-        
-    # return P;
+        P = dataOwner.privateLocalPCA(tmpSummary.T,k_prime,epsilon);
+        #print tmpSummary.shape; 
+
+    #print P[:,0];
+    return P;
     
 def dataOwnerJob(filePath,encFolderPath,pub):
     #print str(int(round(time.time() * 1000)))+", "+filePath+", data share encryption start...";
-    dataOwner = DataOwnerImpl(filePath);
-    dataOwner.setPub(pub);
-    encR,encV,encN = dataOwner.calcAndEncryptDataShare();
+    encR,encV,encN = calcAndEncryptDataShare(filePath,pub);
     fileName = ntpath.basename(filePath);
-    dataOwner.saveShares(encFolderPath,fileName,encR,encV,encN);
+    saveShares(encFolderPath,fileName,encR,encV,encN);
     #print str(time.ctime(time.time()))+", "+filePath+", data share encryption done!";
-     
+         
 def test_myWork(outputFolderPath,encFolderPath):
-    priv, pub = paillierImpl.generate_keypair(128);
+    priv, pub = generate_keypair(128);
     dataFileList = glob.glob(outputFolderPath+"*");
         # 2.1) DataOwnerJob
-        
-    print str(int(round(time.time() * 1000)))+", Data Owners encrypt starts..";
-#    for path in dataFileList:
-#        dataOwnerJob(path,encFolderPath,pub);
+    startTime = int(round(time.time() * 1000));
+    print str(startTime)+", Data Owners encrypt starts..";
+    for path in dataFileList:
+        dataOwnerJob(path,encFolderPath,pub);
         # 2.2) Proxy Job
-    print str(int(round(time.time() * 1000)))+", Data Owners encrypt ends..";    
-    
-    sumEncR,sumEncV,sumEncN = pkg.DPDPCA.Proxy.paraAggrtEncryptedData(encFolderPath,pub);
+    endTime = int(round(time.time() * 1000));
+    print str(endTime)+", Data Owners encrypt ends..";    
+    dataOwnerTime = (endTime-startTime)/len(dataFileList);
+    startTime = int(round(time.time() * 1000));
+    sumEncR,sumEncV,sumEncN = proxyAndDataUser.paraAggrtEncryptedData(encFolderPath,pub);
 #    encRList = glob.glob(encFolderPath+"encR/*");
 #    sumEncR = paraAggregate(proxy,encRList);
     #sumEncR,sumEncV,sumEncN = proxyAndDataUser.aggrtEncryptedDataOwnerShare(encFolderPath,pub);
         # 2.3) Data User Job
-    dataUser = DataUserImpl(pub,priv);
-    dataUser.decryptAndEVD(sumEncR,sumEncV,sumEncN,priv,pub);
-    
+    proxyAndDataUser.dataUserJob(sumEncR,sumEncV,sumEncN,priv,pub);
+    endTime = int(round(time.time() * 1000));
+    totalTime = dataOwnerTime + (endTime-startTime);
+    return totalTime;
+
 def test_otherWork(dataSetPath):
-    print str(int(round(time.time() * 1000)))+", Private Global PCA starts..";
+    startTime = int(round(time.time() * 1000));
+    print str(startTime)+", Private Global PCA starts..";
     privateGlobalPCA(dataSetPath);
-    print str(int(round(time.time() * 1000)))+", Private Global PCA ends..";
-    
+    endTime = int(round(time.time() * 1000));
+    print str(endTime)+", Private Global PCA ends..";
+    return (endTime-startTime); 
 #validateEncScheme();
+
 if __name__ == "__main__":
     
-    dataSetPath = "data/australian_prePCA";
-    # 1) Setup the testing environments by creating the horizontal data.
-    outputFolderPath = dataSetPath+"_referPaper/plaintext/";
-    encFolderPath = dataSetPath + "_referPaper/ciphertext/";
+    datasets = ['diabetes','australian','german', 'ionosphere', 'madelon'];
     
-    for j in range(0,10):
-        if not os.path.exists(encFolderPath):
-                os.mkdir(outputFolderPath);
-                os.mkdir(encFolderPath);
+    for dataset in datasets:
+        print "++++++++++++++++ "+ dataset + " ++++++++++++++++++++";
+        dataSetPath = "input/"+dataset+"_prePCA";
+        # 1) Setup the testing environments by creating the horizontal data.
+        outputFolderPath = dataSetPath+"_referPaper/plaintext/";
+        encFolderPath = dataSetPath + "_referPaper/ciphertext/";
         
-        numOfTrunks = 10;
-        for i in range(0,10):
-            numOfTrunks = 10 + i*20;
-            globalFunction.splitAndSaveDatasets(dataSetPath,outputFolderPath,numOfTrunks);
-             
-            #==================================================
-            print numOfTrunks;
-            test_myWork(outputFolderPath,encFolderPath);
-            print "========================";
-            test_otherWork(outputFolderPath);
-            print "------------------------";
-            #==================================================
-        os.system("rm -rf "+outputFolderPath);
-        os.system("rm -rf "+encFolderPath);
-    
+        cprResult = np.zeros((10,3));
+        totalRound = 5;
+        for j in range(0,totalRound):
+            if not os.path.exists(encFolderPath):
+                    os.system('mkdir -p %s' % outputFolderPath);
+                    os.system('mkdir -p %s' % encFolderPath);
+            
+            numOfTrunks = 10;
+            for i in range(0,10):
+                
+                numOfTrunks = 10 + i*20;
+                cprResult[i][0] = cprResult[i][0]+numOfTrunks;
+                globalFunction.splitAndSaveDatasets(dataSetPath,outputFolderPath,numOfTrunks);             
+                #==================================================
+                print numOfTrunks;
+                myWorkTime = test_myWork(outputFolderPath,encFolderPath);
+                cprResult[i][1] = cprResult[i][1]+myWorkTime;
+                print "========================";
+                otherWorkTime = test_otherWork(outputFolderPath);
+                cprResult[i][2] = cprResult[i][2]+otherWorkTime;
+                print "------------------------";
+                #==================================================
+            os.system("rm -rf "+outputFolderPath);
+            os.system("rm -rf "+encFolderPath);
+            
+        for i in range(0,len(cprResult)):
+                print "%d, %d, %d" % (cprResult[i][0]/totalRound,cprResult[i][1]/totalRound,cprResult[i][2]/totalRound);
+            
+            
     #Test Paillier encryption
     '''
     priv, pub = generate_keypair(128);
