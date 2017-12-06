@@ -1,7 +1,7 @@
 import os;
 import numpy as np;
 import glob;
-import dataOwnerShare;
+#import dataOwnerShare;
 from numpy import linalg as LA;
 import copy;
 from paillier import *;
@@ -13,7 +13,7 @@ import time;
 import ntpath;
 import decimal;
 import math;
-
+import scipy.sparse as sparse;
 '''
 def aggrtDataOwnerShares(folderPath):
     dataFileList = glob.glob(folderPath+"/*");
@@ -39,7 +39,6 @@ def calcEigenvectors(SumR,SumV,SumN):
 def aggrtEncryptedDataOwnerShare(encFolderPath,pub):
     #print "Aggregating encrypted data shares.."
     print str(int(round(time.time() * 1000)))+", Proxy aggregation start...";
-    
     
     encRList = glob.glob(encFolderPath+"encR/*");
     encVList = glob.glob(encFolderPath+"encV/*");
@@ -133,7 +132,7 @@ def callDataOwners(folderPath,encFolderPath,pub):
         print "Error: unable to start thread"
     return;
 '''
-def dataUserJob(encR,encV,encN,priv,pub):
+def dataUserJob(encR,encV,encN,priv,pub,topK):
     
     print str(int(round(time.time() * 1000)))+", Data User decryption starts.."
     
@@ -157,9 +156,12 @@ def dataUserJob(encR,encV,encN,priv,pub):
     N = decrypt(priv,pub,int(encN));
     
     # Performing EVD on decrypted result.
-    aggr = R - np.divide(np.dot(v,v.T),N);
-    w, v = LA.eig(aggr);
-    
+    aggr = R - np.divide(np.outer(v,v),N);
+    if topK == aggr.shape[0]:
+        w, v = sparse.linalg.eigs(aggr,topK-2);
+    else:
+        w, v = sparse.linalg.eigs(aggr,topK);
+        
     print str(int(round(time.time() * 1000)))+", Data User decryption ends.."
     
     return v;
