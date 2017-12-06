@@ -218,7 +218,7 @@ def test_otherWork(dataSetPath):
 
 if __name__ == "__main__":
     
-    datasets = ['diabetes','madelon','CNAE_2','face2','Amazon_3','Amazon_10'];
+    datasets = ['german','madelon','CNAE_2','face2','Amazon_3','Amazon_10'];
     totalRound = 2;
     numDataPerOwner = 3;
     xDataOwners = np.arange(100,1000,100);
