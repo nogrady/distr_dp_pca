@@ -1,8 +1,6 @@
 import os;
 import numpy as np;
 import glob;
-from pkg.DPDPCA.DataOwner import DataOwnerImpl;
-import dataOwnerShare;
 from numpy import linalg as LA;
 from paillier import *;
 import thread;
@@ -174,7 +172,7 @@ def privateGlobalPCA(folderPath):
         k_prime = np.maximum(np.minimum(LA.matrix_rank(tmpData[:,1:]),k),LA.matrix_rank(P));
         
         tmpSummary = np.concatenate((PPrime, P), axis=1);
-        P = privateLocalPCA(tmpSummary.T,k_prime,epsilon);
+        #P = privateLocalPCA(tmpSummary.T,k_prime,epsilon);
         #print tmpSummary.shape; 
     #print P[:,0];
     return P;
@@ -220,7 +218,7 @@ def test_otherWork(dataSetPath):
 
 if __name__ == "__main__":
     
-    datasets = ['diabetes','madelon','CNAE_2','CNAE_5','face1','face2','Amazon_3','Amazon_10'];
+    datasets = ['diabetes','madelon','CNAE_2','face2','Amazon_3','Amazon_10'];
     totalRound = 2;
     numDataPerOwner = 3;
     xDataOwners = np.arange(100,1000,100);
@@ -231,21 +229,22 @@ if __name__ == "__main__":
         # 1) Setup the testing environments by creating the horizontal data.
         outputFolderPath = datasetPath+"_referPaper/plaintext/";
         encFolderPath = datasetPath + "_referPaper/ciphertext/";
-        if os.path.exists(encFolderPath):
+        if not os.path.exists(encFolderPath):
             os.system('mkdir -p %s' % outputFolderPath);
             os.system('mkdir -p %s' % encFolderPath);
-    
+
         cprResult = np.zeros((len(xDataOwners),3));
         rawData = np.loadtxt(datasetPath,delimiter=",");
         matrixRank = LA.matrix_rank(rawData[:,1:]);
-        for j in range(0,totalRound):
-            for k,numDataOwner in np.ndenumerate(xDataOwners):
-                print "Testing with %d data owners." % numDataOwner;
-                if os.path.exists(encFolderPath):
-                    os.system("rm -rf "+outputFolderPath);
-                    os.system("rm -rf "+encFolderPath);
-                    os.system('mkdir -p %s' % outputFolderPath);
-                    os.system('mkdir -p %s' % encFolderPath);
+        for k,numDataOwner in np.ndenumerate(xDataOwners):
+            print "Testing with %d data owners." % numDataOwner;
+            if os.path.exists(encFolderPath):
+                os.system("rm -rf "+outputFolderPath);
+                os.system("rm -rf "+encFolderPath);
+                os.system('mkdir -p %s' % outputFolderPath);
+                os.system('mkdir -p %s' % encFolderPath);
+
+            for j in range(totalRound):
                 indices = np.random.randint(rawData.shape[0], size=(numDataOwner, numDataPerOwner))
                 for i in range(indices.shape[0]):
                     np.savetxt(outputFolderPath+str(i),rawData[indices[i]],delimiter=",");
@@ -258,7 +257,7 @@ if __name__ == "__main__":
                 print "------------------------";
                 
         for result in cprResult/totalRound:
-            print "%d, %d, %d" % (result[0],result[1],result[2]);
+            print "%d,%d,%d" % (result[0],result[1],result[2]);
             
             
     #Test Paillier encryption
