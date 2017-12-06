@@ -83,11 +83,11 @@ def split_list(alist, wanted_parts=1):
     return [ alist[i*length // wanted_parts: (i+1)*length // wanted_parts] 
              for i in range(wanted_parts) ]
 
-def paraTask(fileList,pub):
-    p = Pool(8);
+def paraTask(fileList,pub,p):
+    
     results = [];
     #numOfTrunks = int(len(fileList)/math.log(len(fileList)));
-    numOfTrunks = 4;
+    numOfTrunks = 8;
     #print "num of trunks:" + str(numOfTrunks);
     subEncSets = split_list(fileList,numOfTrunks);
     # using apply_async
@@ -98,28 +98,27 @@ def paraTask(fileList,pub):
     # wait for results
     sumEnc = results[0].get();
     if isinstance(sumEnc,np.ndarray):
-        for res in results[1:]:
+        for res in results:
             addEncryptedData(sumEnc,res.get(),pub);
         #print sumEnc.shape;
     else:
         for res in results[1:]:
             sumEnc = e_add(pub, sumEnc, res.get());
-    
-    p.close();
     return sumEnc;
     
 def paraAggrtEncryptedData(encFolderPath,pub):
     
     print str(int(round(time.time() * 1000)))+", Proxy parallel aggregation start...";
-    
+    p = Pool(8);
     encRList = glob.glob(encFolderPath+"encR/*");
-    sumEncR = paraTask(encRList,pub);
+    sumEncR = paraTask(encRList,pub,p);
     encVList = glob.glob(encFolderPath+"encV/*");
-    sumEncV = paraTask(encVList,pub);
+    sumEncV = paraTask(encVList,pub,p);
     encNList = glob.glob(encFolderPath+"encN/*");
-    sumEncN = paraTask(encNList,pub);
+    sumEncN = paraTask(encNList,pub,p);
     print str(int(round(time.time() * 1000)))+", Proxy parallel aggregation end...";
-    
+    p.close();
+    p.join();
     return sumEncR,sumEncV,sumEncN;
 '''   
 def callDataOwners(folderPath,encFolderPath,pub):
